@@ -57,8 +57,8 @@ class NativeShellModule(reactContext: ReactApplicationContext) :
     fun executeProotCommand(command: String, distro: String, promise: Promise) {
         Thread {
             try {
-                val escapedCommand = command.replace("\"", "\\\"")
-                val prootCmd = "proot-distro login $distro -- /bin/bash -c \\\"$escapedCommand\\\""
+                val escapedCommand = command.replace("\"", "\\\\\"")
+                val prootCmd = "proot-distro login " + distro + " -- /bin/bash -c \\\"" + escapedCommand + "\\\""
                 val pb = ProcessBuilder(listOf("/system/bin/sh", "-c", prootCmd))
                 pb.redirectErrorStream(false)
 
