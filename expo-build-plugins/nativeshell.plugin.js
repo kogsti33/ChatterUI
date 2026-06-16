@@ -7,7 +7,6 @@ const PLUGIN_VERSION = '1.0.0'
 
 const NATIVE_SHELL_KT = `package com.chatterui.nativeshell
 
-import android.util.Base64
 import com.facebook.react.bridge.*
 
 class NativeShellModule(reactContext: ReactApplicationContext) :
@@ -58,7 +57,8 @@ class NativeShellModule(reactContext: ReactApplicationContext) :
     fun executeProotCommand(command: String, distro: String, promise: Promise) {
         Thread {
             try {
-                val prootCmd = "proot-distro login $distro -- /bin/bash -c \${command.replaceDoubleQuotes()}"
+                val escapedCommand = command.replace("\"", "\\\"")
+                val prootCmd = "proot-distro login $distro -- /bin/bash -c \\\"$escapedCommand\\\""
                 val pb = ProcessBuilder(listOf("/system/bin/sh", "-c", prootCmd))
                 pb.redirectErrorStream(false)
 
@@ -93,10 +93,6 @@ class NativeShellModule(reactContext: ReactApplicationContext) :
         }.start()
     }
 }
-
-private fun String.replaceDoubleQuotes(): String {
-    return this.replace("\\\"", "\\\\\"").replace("\"", "\\\\\"")
-}
 `
 
 const NATIVE_SHELL_PACKAGE_KT = `package com.chatterui.nativeshell
@@ -123,55 +119,61 @@ const withNativeShell = (config) => {
         (config) => {
             const { projectRoot } = config.modRequest
 
-            const mainDir = path.join(
-                projectRoot,
-                'android',
-                'app',
-                'src',
-                'main',
-                'java',
-                'com',
-                'chatterui',
-                'nativeshell'
-            )
-            fs.mkdirSync(mainDir, { recursive: true })
-
-            fs.writeFileSync(path.join(mainDir, 'NativeShellModule.kt'), NATIVE_SHELL_KT)
-            fs.writeFileSync(path.join(mainDir, 'NativeShellPackage.kt'), NATIVE_SHELL_PACKAGE_KT)
-
-            const mainApplicationPath = path.join(
-                projectRoot,
-                'android',
-                'app',
-                'src',
-                'main',
-                'java',
-                'com',
-                'chatterui'
+            const javaDir = path.join(
+                projectRoot, 'android', 'app', 'src', 'main', 'java'
             )
 
-            let mainApplication = ''
-            const files = fs.readdirSync(mainApplicationPath)
-            for (const f of files) {
-                if (f.includes('MainApplication')) {
-                    mainApplication = path.join(mainApplicationPath, f)
-                    break
+            let pkgDir = ''
+            function findMainApplication(dir) {
+                if (!fs.existsSync(dir)) return null
+                const entries = fs.readdirSync(dir, { withFileTypes: true })
+                for (const e of entries) {
+                    if (e.isFile() && e.name.includes('MainApplication')) {
+                        return path.join(dir, e.name)
+                    }
+                    if (e.isDirectory()) {
+                        const result = findMainApplication(path.join(dir, e.name))
+                        if (result) return result
+                    }
                 }
+                return null
             }
 
-            if (mainApplication) {
-                let content = fs.readFileSync(mainApplication, 'utf8')
-                if (!content.includes('NativeShellPackage')) {
-                    content = content.replace(
-                        /import\s+/,
-                        'import com.chatterui.nativeshell.NativeShellPackage\nimport '
-                    )
-                    content = content.replace(
-                        /packages\s*\+=\s*listOf\(/,
-                        'packages += listOf(\n                NativeShellPackage(),\n                '
-                    )
-                    fs.writeFileSync(mainApplication, content)
-                }
+            const mainAppPath = findMainApplication(javaDir)
+            if (!mainAppPath) {
+                console.warn('NativeShell: MainApplication.kt not found, skipping.')
+                return config
+            }
+
+            pkgDir = path.dirname(mainAppPath)
+            const nativeshellDir = path.join(pkgDir, 'nativeshell')
+            fs.mkdirSync(nativeshellDir, { recursive: true })
+
+            const pkgName = path.basename(path.dirname(mainAppPath))
+
+            const moduleKt = NATIVE_SHELL_KT.replace(
+                'package com.chatterui.nativeshell',
+                `package ${pkgName}.nativeshell`
+            )
+            const packageKt = NATIVE_SHELL_PACKAGE_KT.replace(
+                'package com.chatterui.nativeshell',
+                `package ${pkgName}.nativeshell`
+            )
+
+            fs.writeFileSync(path.join(nativeshellDir, 'NativeShellModule.kt'), moduleKt)
+            fs.writeFileSync(path.join(nativeshellDir, 'NativeShellPackage.kt'), packageKt)
+
+            let content = fs.readFileSync(mainAppPath, 'utf8')
+            if (!content.includes('NativeShellPackage')) {
+                content = content.replace(
+                    /import\s+/,
+                    `import ${pkgName}.nativeshell.NativeShellPackage\nimport `
+                )
+                content = content.replace(
+                    /packages\s*\+=\s*listOf\(/,
+                    'packages += listOf(\n                NativeShellPackage(),\n                '
+                )
+                fs.writeFileSync(mainAppPath, content)
             }
 
             return config
