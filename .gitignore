@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Native
+android/app/build/
+android/build/
+ios/
+*.hprof
+
+# Metro
+.metro-health-check*
+
+# env
+.env
+.env.local
+.env.production
+
+# OS
+.DS_Store
+*.pem
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary
+*.tgz
+coverage/
+
+# EAS
+.eas/
+android/
