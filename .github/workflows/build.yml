@@ -35,13 +35,19 @@ jobs:
       - name: Generate native Android project
         run: npx expo prebuild --clean --platform android
 
+      - name: Limit build to arm64-v8a only
+        working-directory: android
+        run: |
+          sed -i 's/reactNativeArchitectures=.*/reactNativeArchitectures=arm64-v8a/' gradle.properties
+          sed -i 's/-Xmx[0-9]*m/-Xmx4096m/' gradle.properties
+
       - name: Build Debug APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon -PreactNativeArchitectures=arm64-v8a
 
-      - name: Upload APK
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: chatterui-debug
@@ -50,7 +56,7 @@ jobs:
 
       - name: Build Release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
